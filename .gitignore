@@ -1,1 +1,3 @@
+# Local run output: main.ts writes board.json, data.js, dashboard/, screenshots/ and dossier.json
+# here when MAKEFUN_OUTPUT_DIR points at it. The grader builds its own; this copy is never handed in.
 out/
