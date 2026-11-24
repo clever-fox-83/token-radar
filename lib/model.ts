@@ -182,16 +182,18 @@ const DAY_MS = 86_400_000;
 
 /** A finite number, else `fallback`. */
 function finite(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  if (typeof value !== 'number') return fallback;
+  return Number.isFinite(value) ? value : fallback;
 }
 
 /** A whole day count from `from` to `to`, clamped at zero; null when either date is absent or bad. */
 export function ageDays(asOf: string, listedAt: string | null): number | null {
   if (listedAt === null) return null;
-  const a = Date.parse(`${asOf}T00:00:00Z`);
-  const b = Date.parse(`${listedAt}T00:00:00Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-  return Math.max(0, Math.floor((a - b) / DAY_MS));
+  const start = Date.parse(`${listedAt}T00:00:00Z`);
+  const end = Date.parse(`${asOf}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  const days = Math.floor((end - start) / DAY_MS);
+  return days < 0 ? 0 : days;
 }
 
 /** The median of a non-empty list of numbers. */
@@ -265,19 +267,23 @@ export function impliedValue(protocol: SnapshotProtocol, asOf: string, model: Mo
 /** DefiLlama's version-marker rule: a name ending in a release is a pool of another protocol. */
 const VERSIONED = /\s(V\d+(\.\d+)?|v\d+(\.\d+)?|\d+\.\d+)$/;
 
-/** Whether a protocol records no token at all. */
+/** Whether a protocol records no token at all: no market cap, no CoinGecko id, no symbol. */
 export function isPreToken(p: SnapshotProtocol): boolean {
   return p.mcap_usd === null && p.gecko_id === null && p.symbol === null;
 }
 
-/** Whether a protocol is one the board may rank: pre-token, not an exchange, not a versioned pool. */
+/** Whether a protocol is one the board may rank: pre-token, not an exchange, not a versioned pool of another protocol. */
 export function isRankable(p: SnapshotProtocol): boolean {
-  return isPreToken(p) && p.category !== 'CEX' && !VERSIONED.test(p.name);
+  if (!isPreToken(p)) return false;
+  if (p.category === 'CEX') return false;
+  return !VERSIONED.test(p.name);
 }
 
-/** The snapshot's protocol by slug. */
+/** The snapshot's protocols indexed by slug, for the watchlist lookup. */
 function bySlug(protocols: SnapshotProtocol[]): Map<string, SnapshotProtocol> {
-  return new Map(protocols.map((p) => [p.slug, p]));
+  const index = new Map<string, SnapshotProtocol>();
+  for (const p of protocols) index.set(p.slug, p);
+  return index;
 }
 
 /** The headline sentence's figures: how many watchlist slugs, how many rows, how many live protocols. */
@@ -343,7 +349,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
 
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
-/** A step as one string: its action, then its cost and time, within the gate's 20..600 characters. */
+/** A step as one string: its action, then its cost and time, kept inside the gate's 20..600 characters. */
 export function stepText(step: FarmStep): string {
   let s = `${step.text} Cost: ${step.cost}. Time: ${step.time}.`;
   if (s.length > 600) s = `${s.slice(0, 596)}...`;
@@ -597,3 +603,4 @@ export function boardIssue(board: BoardRow[], snapshot: Snapshot): string | null
 export function dataScript(radar: RadarData): string {
   return `window.RADAR=${JSON.stringify(radar)};\n`;
 }
+
